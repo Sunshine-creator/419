@@ -1,0 +1,183 @@
+package wangluo;
+
+import jpcap.*;
+import jpcap.packet.Packet;
+import jpcap.packet.IPPacket;
+import jpcap.packet.TCPPacket;
+import jpcap.packet.ICMPPacket;
+import jpcap.packet.UDPPacket;
+
+import java.nio.charset.StandardCharsets;
+import java.util.Scanner;
+import java.io.IOException;
+
+import javax.xml.bind.annotation.adapters.HexBinaryAdapter;
+
+public class xieyi {
+	
+
+	public static void main(String[] args) {
+
+		/*--------------	第一步绑定网络设备 --------------*/
+
+		NetworkInterface[] devices = JpcapCaptor.getDeviceList();//获取本机的网络接口列表
+		//      NetworkInterface[]搜索具有绑定到其的指定Internet协议（IP）地址的网络接口的便捷方法。
+		//如果指定的IP地址绑定到多个网络接口，则不会定义返回哪个网络接口。
+		//        此类表示由名称和分配给此接口的IP地址列表组成的网络接口。
+		//        它用于标识加入多播组的本地接口。接口通常以诸如“le0”之类的名称而为人所知。
+		//接口对象包含了对应网络接口的一些信息,名称、描述、IP以及MAC地址以及数据链路层名称和描述
+        //输出各种网卡
+		int number=1；
+		HexBinaryAdapter hex = new HexBinaryAdapter();
+		for (NetworkInterface n : devices) {
+
+			System.out.println(number+"："+n.name + " 网卡描述： " + n.description);
+			number++;
+		}
+
+		System.out.println("-------------------------------------------");
+		System.out.println("选择网口(输入对应的编号)：");
+		Scanner input=new Scanner(System.in);
+		int n=input.nextInt();
+		JpcapCaptor jpcap = null;
+
+		int caplen = 1512;
+
+		boolean promiscCheck = true;
+
+		try {
+
+			jpcap = JpcapCaptor.openDevice(devices[n], caplen, promiscCheck, 50);
+			//0 或 1
+			// static Jpcap openDevice(String device,int snaplen,boolean promisc ,int to_ms)
+			// device参数是网络接口的名字；
+			// snaplen参数是一次捕获的最大字节数量；
+			// promisc参数，如果为true，接口被设置为混杂模式；
+			// to_ms参数，设定processPacket()中的Timeout；当指定接口不能被打开抛出IO异常。
+
+		} catch (IOException e) {
+
+			e.printStackTrace();
+			//在命令行打印异常信息在程序中出错的位置及原因
+		} 
+		// static Jpcap openDevice(String device,int snaplen,boolean promisc ,int to_ms)
+		// device参数是网络接口的名字；
+		// snaplen参数是一次捕获的最大字节数量；
+		// promisc参数，如果为true，接口被设置为混杂模式；
+		// to_ms参数，设定processPacket()中的Timeout；当指定接口不能被打开抛出IO异常。
+
+		/*----------第二步抓包-----------------*/
+
+		System.out.println("请输入你想要找的协议：");
+        System.out.println("****************************");
+        System.out.println("提示：  -1  表示输出全部的协议 ");
+        System.out.println("        1  表示ICMP协议  ");
+        System.out.println("        6  表示TCP协议");
+        System.out.println("        17 表示UDP协议");
+        System.out.println("****************************");
+        
+        int s0 = input.nextInt();
+        String protocols = "";
+        int k=0;
+        int counts=0;
+
+        while( k < 10 ){
+            Packet packet = jpcap.getPacket();
+            //返回一个捕获的数据包
+
+            if (packet instanceof IPPacket ){
+            	//判断其左边对象是否为其右边类的实例，返回boolean类型的数据
+                IPPacket ip = (IPPacket) packet;// 强转
+                //         进行过滤初始化处理
+                int s1;
+                s1=new Integer( ip.protocol ) ;
+                if(s0==-1)
+                    s0=s1;
+                k++;
+
+                //         进入协议输出处理
+                if(s0==s1) {
+                    counts++;
+                    //	字节码转换为ascii
+                    byte [] b;
+                    b=ip.data;
+                    String s=new String(b, StandardCharsets.US_ASCII);
+                    //	输出显示
+                    System.out.println("    这是抓到的第" + k + "个包");
+                    System.out.println("头部："+hex.marshal(ip.header));
+                    System.out.println("版本：IPv" + ip.version);
+                    System.out.println("数据包长度：" + ip.length);
+                    System.out.println("数据内容：" + s);
+                    System.out.println("标识：" + ip.ident);
+                    if (ip.version == 4) {
+                        System.out.println("IPv4 报头的选项：" + ip.option);
+                        System.out.println("片偏移：" + ip.offset);
+                        System.out.println("DF:Don't Fragment: " + ip.dont_frag);
+                        System.out.println("MF:More Fragment: " + ip.more_frag);
+                        System.out.println("分组标识:" + ip.ident);
+                    }
+                    else {
+                        System.out.println("IPv6 报头的选项：" + ip.options);
+                    }
+                    switch (s0) {
+                        case 1:
+                            protocols = "ICMP";
+                            ICMPPacket icmp = (ICMPPacket) packet;// 强转
+                            System.out.println("ICMP部分");
+                            System.out.println("ICMP报文类型：" + icmp.type);
+                            System.out.println("ICMP报文代码: " + icmp.code);
+                            System.out.println("校验和：" + icmp.checksum);
+                            System.out.println("序列号：" + icmp.seq);
+                            System.out.println("子网掩码：" + icmp.subnetmask);
+                            System.out.println("生存时间：" + icmp.alive_time);
+                            System.out.println("发起时间戳：" + icmp.orig_timestamp);
+                            System.out.println("传送时间戳：" + icmp.trans_timestamp);
+                            break;
+                        case 6:
+                            protocols = "TCP";
+                            TCPPacket tcp = (TCPPacket) packet;// 强转
+                            System.out.println("TCP部分");
+                            System.out.println("源端口号: " + tcp.src_port);
+                            System.out.println("目的端口号: " + tcp.dst_port);
+                            System.out.println("窗口: " + tcp.window);
+                            System.out.println("序号: " + tcp.sequence);
+                            System.out.println("URG标志: " + tcp.urg);
+                            System.out.println("紧急指针: " + tcp.urgent_pointer);
+                            System.out.println("ACK标志: " + tcp.ack);
+                            System.out.println("ACK确认号: " + tcp.ack_num);
+                            System.out.println("FIN标志: " + tcp.fin);
+                            break;
+                        case 17:
+                            protocols = "UDP";
+                            UDPPacket udp = (UDPPacket) packet;// 强转
+                            System.out.println("UDP部分");
+                            System.out.println("源端口号" + udp.src_port);
+                            System.out.println("目的端口号" + udp.dst_port);
+                            System.out.println("UDP包长度 " + udp.length);
+                            break;
+                        default:
+                            break;
+                    }
+                    System.out.println("----------------------");
+                    System.out.println("协议类型：" + protocols);
+                    System.out.println("未知：" + ip.d_flag);
+                    System.out.println("生存期：" + ip.hop_limit);
+                    System.out.println("数据包长度：" + ip.length);
+                    System.out.println("优先权：" + ip.priority);
+                    System.out.println("源IP " + ip.src_ip.getHostAddress());
+                    System.out.println("目的IP " + ip.dst_ip.getHostAddress());
+                    System.out.println("服务类型: " + ip.rsv_tos);
+
+                    System.out.println("区分服务：最大的吞吐量： " + ip.t_flag);
+                    System.out.println("区分服务：最高的可靠性：" + ip.r_flag);
+                    System.out.println("源主机名： " + ip.src_ip);
+                    System.out.println("目的主机名： " + ip.dst_ip);
+                    System.out.println("----------------------------------------------");
+                    
+                }
+            }
+        }
+        if ( counts == 0 )
+            System.out.println("在此次抓包中没有你想要的协议！");
+    }
+}
